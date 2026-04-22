@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<a href="fromscratch.html">Return to Adventure Page</a>
+<a href="index.html">Return to Resume</a>
+<title>Wordle Clone</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #121213;
+    color: white;
+    text-align: center;
+  }
+
+  a {
+    color: yellow;
+    margin-left: 20px;
+  }
+
+  #game {
+    display: grid;
+    grid-template-rows: repeat(6, 1fr);
+    gap: 5px;
+    width: 300px;
+    margin: 20px auto;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+  }
+
+  .tile {
+    border: 2px solid #3a3a3c;
+    height: 50px;
+    line-height: 50px;
+    font-size: 24px;
+    text-transform: uppercase;
+  }
+
+  .correct { background: #538d4e; border: none; }
+  .present { background: #b59f3b; border: none; }
+  .absent  { background: #3a3a3c; border: none; }
+
+  #keyboard { margin-top: 20px; }
+
+  .key {
+    display: inline-block;
+    margin: 3px;
+    padding: 10px;
+    background: #818384;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .key.correct { background: #538d4e; }
+  .key.present { background: #b59f3b; }
+  .key.absent  { background: #3a3a3c; }
+
+  .key.wide { padding: 10px 18px; }
+
+  #message { margin-top: 15px; font-size: 18px; }
+
+  #playAgain {
+    display: none;
+    margin-top: 15px;
+    padding: 10px 20px;
+    border: none;
+    background: #538d4e;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>Wordle Clone</h1>
+<div id="game"></div>
+<div id="keyboard"></div>
+<div id="message">Loading dictionary...</div>
+<button id="playAgain" onclick="resetGame()">Play Again</button>
+
+<script>
+let validWords = [];
+let target = "";
+
+let currentRow = 0;
+let currentCol = 0;
+let board;
+let gameOver = false;
+
+const gameEl = document.getElementById("game");
+const keyboardEl = document.getElementById("keyboard");
+const messageEl = document.getElementById("message");
+const playAgainBtn = document.getElementById("playAgain");
+
+// Load a curated Wordle-style word list
+fetch("https://raw.githubusercontent.com/tabatkins/wordle-list/main/words")
+  .then(res => res.text())
+  .then(text => {
+    validWords = text.split("\n").map(w => w.trim().toLowerCase());
+
+    startGame();
+  });
+  
+function startGame() {
+  target = validWords[Math.floor(Math.random() * validWords.length)];
+  currentRow = 0;
+  currentCol = 0;
+  board = Array.from({ length: 6 }, () => Array(5).fill(""));
+  gameOver = false;
+
+  messageEl.textContent = "";
+  playAgainBtn.style.display = "none";
+
+  createBoard();
+  createKeyboard();
+}
+
+function createBoard() {
+  gameEl.innerHTML = "";
+  for (let r = 0; r < 6; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    for (let c = 0; c < 5; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      row.appendChild(tile);
+    }
+    gameEl.appendChild(row);
+  }
+}
+
+function createKeyboard() {
+  const layout = ["qwertyuiop","asdfghjkl","zxcvbnm"];
+  keyboardEl.innerHTML = "";
+
+  layout.forEach((row, i) => {
+    const rowDiv = document.createElement("div");
+
+    if (i === 2) rowDiv.appendChild(createKey("Enter","wide"));
+
+    row.split("").forEach(k => rowDiv.appendChild(createKey(k)));
+
+    if (i === 2) rowDiv.appendChild(createKey("⌫","wide"));
+
+    keyboardEl.appendChild(rowDiv);
+  });
+}
+
+function createKey(key, extra="") {
+  const btn = document.createElement("span");
+  btn.textContent = key;
+  btn.className = "key " + extra;
+  btn.onclick = () => handleInput(key);
+  btn.id = "key-" + key;
+  return btn;
+}
+
+function handleInput(key) {
+  if (gameOver || !target) return;
+
+  if (key === "Enter") submitGuess();
+  else if (key === "⌫") {
+    if (currentCol > 0) {
+      currentCol--;
+      board[currentRow][currentCol] = "";
+      updateBoard();
+    }
+  } else {
+    if (currentCol < 5) {
+      board[currentRow][currentCol] = key;
+      currentCol++;
+      updateBoard();
+    }
+  }
+}
+
+function updateBoard() {
+  const rows = document.querySelectorAll(".row");
+  rows.forEach((rowEl, r) => {
+    const tiles = rowEl.children;
+    for (let c = 0; c < 5; c++) {
+      tiles[c].textContent = board[r][c];
+    }
+  });
+}
+
+function colorKey(letter, status) {
+  const key = document.getElementById("key-" + letter);
+  if (!key) return;
+
+  if (status === "correct") {
+    key.classList.remove("present","absent");
+    key.classList.add("correct");
+  } else if (status === "present" && !key.classList.contains("correct")) {
+    key.classList.add("present");
+  } else if (status === "absent" && !key.classList.contains("correct") && !key.classList.contains("present")) {
+    key.classList.add("absent");
+  }
+}
+
+function endGame(message) {
+  messageEl.textContent = message;
+  gameOver = true;
+  playAgainBtn.style.display = "inline-block";
+}
+
+function submitGuess() {
+  if (currentCol < 5) {
+    messageEl.textContent = "Not enough letters";
+    return;
+  }
+
+  const guess = board[currentRow].join("");
+
+  if (!validWords.includes(guess)) {
+    messageEl.textContent = "Not a real word";
+    return;
+  }
+
+  messageEl.textContent = "";
+
+  const tiles = document.querySelectorAll(".row")[currentRow].children;
+  let tempTarget = target.split("");
+
+  for (let i = 0; i < 5; i++) {
+    if (guess[i] === target[i]) {
+      tiles[i].classList.add("correct");
+      colorKey(guess[i], "correct");
+      tempTarget[i] = null;
+    }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    if (!tiles[i].classList.contains("correct")) {
+      if (tempTarget.includes(guess[i])) {
+        tiles[i].classList.add("present");
+        colorKey(guess[i], "present");
+        tempTarget[tempTarget.indexOf(guess[i])] = null;
+      } else {
+        tiles[i].classList.add("absent");
+        colorKey(guess[i], "absent");
+      }
+    }
+  }
+
+  if (guess === target) {
+    endGame("🎉 You win!");
+    return;
+  }
+
+  currentRow++;
+  currentCol = 0;
+
+  if (currentRow === 6) {
+    endGame("Game Over! Word was: " + target);
+  }
+}
+
+function resetGame() {
+  startGame();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleInput("Enter");
+  else if (e.key === "Backspace") handleInput("⌫");
+  else if (/^[a-zA-Z]$/.test(e.key)) handleInput(e.key.toLowerCase());
+});
+</script>
+
+</body>
+</html>
